@@ -1,28 +1,23 @@
 //
-//  MYTouchSurface.swift
+//  Untitled.swift
 //  Calculator
 //
-//  Created by Garib Agaev on 14.02.2026.
+//  Created by Garib Agaev on 22.02.2026.
 //
 
 import UIKit
 
-class MYTouchSurface: UIView {
-	private var containers: [ItemContainer] = []
-	private var touchTrackingMap: [UITouch: ItemContainer] = [:]
+class MYTouchSurface: UICollectionView {
 	
-	override init(frame: CGRect) {
-		super.init(frame: frame)
-		self.isMultipleTouchEnabled = true
+	override init(frame: CGRect, collectionViewLayout layout: UICollectionViewLayout) {
+		super.init(frame: frame, collectionViewLayout: layout)
+		isMultipleTouchEnabled = true
+		isScrollEnabled = false
 	}
 	
+	private var touchTrackingMap: [UITouch: MYHighlightableContainerCell] = [:]
+
 	required init?(coder: NSCoder) { fatalError() }
-	
-	func addTile(_ view: UIView) {
-		let container = ItemContainer(contentView: view)
-		addSubview(container)
-		containers.append(container)
-	}
 	
 	// MARK: - Touch Handling Lifecycle
 	
@@ -64,76 +59,21 @@ class MYTouchSurface: UIView {
 	}
 	
 	private func stopTracking(_ touch: UITouch) {
-		guard let container = touchTrackingMap.removeValue(forKey: touch) else { return }
-		
-		container.registerTouchExit()
+		touchTrackingMap.removeValue(forKey: touch)?.registerTouchExit()
 		
 		let location = touch.location(in: self)
-		let endedInside = container.point(inside: location, with: nil)
-		let isLastTouch = touchTrackingMap.isEmpty
 		
-		if endedInside, isLastTouch {
-			(container.contentView as? MYTouchSurfaceActionable)?.touchSurfaceDidTrigger()
+		if touchTrackingMap.isEmpty {
+			(hitTest(location, with: nil) as? MYTouchSurfaceActionable)?.touchSurfaceDidTrigger()
 		}
 	}
 	
 	@inline(__always)
-	private func foundItemContainer(_ point: CGPoint) -> ItemContainer? {
+	private func foundItemContainer(_ point: CGPoint) -> MYHighlightableContainerCell? {
 		var responder: UIResponder? = hitTest(point, with: nil)
-		while responder != nil, !(responder is ItemContainer) {
+		while responder != nil, !(responder is MYHighlightableContainerCell) {
 			responder = responder?.next
 		}
-		return responder as? ItemContainer
-	}
-}
-
-
-private final class ItemContainer: MYTouchTrackingControl {
-	private let dimmingView = UIView()
-	let contentView: UIView
-	
-	init(contentView: UIView) {
-		self.contentView = contentView
-		super.init(frame: .zero)
-		
-		setupViews()
-	}
-	
-	required init?(coder: NSCoder) { fatalError() }
-	
-	private func setupViews() {
-		dimmingView.backgroundColor = .white.withAlphaComponent(0.5)
-		dimmingView.alpha = 0
-		dimmingView.isUserInteractionEnabled = false
-		
-		addSubview(contentView)
-		addSubview(dimmingView)
-	}
-	
-	// MARK: - Layout & HitTest
-	
-	override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-		let pointInContent = convert(point, to: contentView)
-		let hitView = contentView.hitTest(pointInContent, with: event)
-		return hitView != nil
-	}
-	
-	override func layoutSubviews() {
-		super.layoutSubviews()
-		
-		contentView.layoutIfNeeded()
-		
-		dimmingView.frame = contentView.frame
-		dimmingView.layer.cornerRadius = contentView.layer.cornerRadius
-		dimmingView.clipsToBounds = true
-	}
-	
-	// MARK: - State Handling
-	override func didUpdateTouchState(isActive: Bool) {
-		let targetAlpha: CGFloat = isActive ? 1.0 : 0.0
-		
-		UIView.animate(withDuration: 0.44) { [weak self] in
-			self?.dimmingView.alpha = targetAlpha
-		}
+		return responder as? MYHighlightableContainerCell
 	}
 }

@@ -2,16 +2,19 @@
 //  MYGridContainer.swift
 //  Calculator
 //
-//  Created by Garib Agaev on 20.02.2026.
+//  Created by Garib Agaev on 22.02.2026.
 //
 
 
 import Foundation
 
-struct MYGridContainer {	
-	lazy var vertical: GridLayout = verticalClosure()
-	lazy var horizontal: GridLayout = horizontalClosure()
-	lazy var horizontalSecond: GridLayout = horizontalSecondClosure()
+struct MYGridContainer<T: Identifiable & Hashable> {
+	
+	typealias GridLayout = MYGridLayout<T>
+	
+	lazy var vertical = verticalClosure()
+	lazy var horizontal = horizontalClosure()
+	lazy var horizontalSecond = horizontalSecondClosure()
 	
 	private let verticalClosure: () -> GridLayout
 	private let horizontalClosure: () -> GridLayout

@@ -8,7 +8,7 @@
 
 import Foundation
 
-enum MYCalculatorAction: Equatable {
+enum MYCalculatorAction: Identifiable, Hashable {
 	case digit(MYDecimalCharacter)
 	case binaryOperation(MYBinaryOperation)
 	case unary(MYUnaryOperation)
@@ -17,4 +17,6 @@ enum MYCalculatorAction: Equatable {
 	case calculate
 	case clear
 	case shift
+	
+	var id: Self { self }
 }

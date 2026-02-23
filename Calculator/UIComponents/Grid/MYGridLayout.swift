@@ -1,30 +1,30 @@
 //
-//  Grid.swift
+//  MYGridLayout.swift
 //  Calculator
 //
-//  Created by Garib Agaev on 14.02.2026.
+//  Created by Garib Agaev on 21.02.2026.
 //
 
+import Foundation
+import CoreGraphics
 
-import UIKit
-
-final class GridLayout {
+final class MYGridLayout<T: Identifiable & Hashable> {
 	
 	enum Item {
-		case view(UIView, w: Int = 1)
+		case id(T, w: Int = 1)
 		case space(w: Int = 1)
 		
 		var width: Int {
 			switch self {
-			case .view(_, let w), .space(let w):
+			case .id(_, let w), .space(let w):
 				return w
 			}
 		}
 		
-		var view: UIView? {
+		var id: T? {
 			switch self {
-			case .view(let v, _):
-				return v
+			case .id(let t, _):
+				return t
 			case .space:
 				return nil
 			}
@@ -43,15 +43,13 @@ final class GridLayout {
 	
 	// MARK: - Derived metrics
 	
-	private var columns: Int {
-		items
-			.map { row in row.reduce(0) { $0 + $1.width } }
-			.max() ?? 0
-	}
+	private lazy var columns = items
+		.map {
+			row in row.reduce(0) { $0 + $1.width }
+		}
+		.max() ?? 0
 	
-	private var rows: Int {
-		items.count
-	}
+	private var rows: Int { items.count }
 	
 	private var totalHorizontalSpacing: CGFloat {
 		CGFloat(max(columns - 1, 0)) * spacing
@@ -75,9 +73,17 @@ final class GridLayout {
 		return CGFloat(rows) * unitHeight + totalVerticalSpacing
 	}
 	
+	// MARK:
+	
+	private lazy var set: Set<T> = Set(items.flatMap { $0.compactMap { $0.id } })
+	
+	func contains(_ id: T) -> Bool {
+		set.contains(id)
+	}
+	
 	// MARK: - Layout
 	
-	func layout(fittingHeight: CGFloat? = nil, completion: (UIView, CGRect) -> Void) {
+	func layout(fittingHeight: Double? = nil, completion: (T, CGRect) -> Void) {
 		guard columns > 0, rows > 0 else { return }
 		
 		let calculatedUnitHeight = fittingHeight.map {
@@ -94,7 +100,7 @@ final class GridLayout {
 				let itemWidth = CGFloat(item.width) * (currentUnitWidth + spacing) - spacing
 				
 				
-				item.view.map {
+				item.id.map {
 					let rect = CGRect(
 						x: x,
 						y: y,

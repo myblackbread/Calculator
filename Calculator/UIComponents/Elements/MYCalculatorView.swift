@@ -2,43 +2,55 @@
 //  MYCalculatorView.swift
 //  Calculator
 //
-//  Created by Garib Agaev on 14.02.2026.
+//  Created by Garib Agaev on 22.02.2026.
 //
+
 
 import UIKit
 
+extension MYCalculatorButton: MYTouchSurfaceActionable {
+	func touchSurfaceDidTrigger() {
+		delegate?.calculatorButtonDidTap(self.model)
+	}
+}
+
 final class MYCalculatorView: MYTouchSurface {
 	
+	typealias ButtonID = MYCalculatorAction
+	private typealias GridContainer = MYGridContainer<MYCalculatorAction>
+	private typealias GridLayout = MYGridContainer<MYCalculatorAction>.GridLayout
+	
+	private lazy var buttons = Dictionary(
+		uniqueKeysWithValues: MYButtonModelFactory().makeButtonModels().map {
+			($0.action, $0)
+		}
+	)
+	
+	private func updateDate(model: MYCalculatorButtonModel) {
+		guard let oldModel = buttons[model.action.id] else { return }
+		if model.visualState != oldModel.visualState || model.title != oldModel.title {
+			buttons[model.action.id] = model
+			actionPaths[model.action.id].map { indexPath in
+				reloadItems(at: [indexPath])
+			}
+		}
+	}
+	
+	private var indexesPath: [IndexPath: ButtonID] = [:]
+	private var actionPaths: [ButtonID: IndexPath] = [:]
 	
 	// MARK: - Properties
 	
 	private var isScientificMode = false {
-		willSet {
-			updateVisibility(isHidden: true)
-		}
-		didSet {
-			updateVisibility(isHidden: false)
-			setNeedsLayout()
-		}
+		didSet { configure() }
 	}
 	
 	var orientation: MYOrientation = .vertical {
-		willSet {
-			updateVisibility(isHidden: true)
-		}
-		didSet {
-			updateVisibility(isHidden: false)
-			setNeedsLayout()
-		}
+		didSet { configure() }
 	}
 	
-	private lazy var container = loadGrid()
-	private let loadGrid: () -> MYGridContainer
-	
-	private var allGrids: [GridLayout] {
-		[container.vertical, container.horizontal, container.horizontalSecond]
-	}
-	
+	private var container: GridContainer
+
 	private var currentGrid: GridLayout {
 		switch (isScientificMode, orientation) {
 		case (_, .vertical): container.vertical
@@ -47,16 +59,22 @@ final class MYCalculatorView: MYTouchSurface {
 		}
 	}
 	
-	weak var delegate: (any MYCalculatorServiceProtocol)?
+	weak var calculatorService: (any MYCalculatorServiceProtocol)?
 	
 	// MARK: - Init
 	
 	init(
-		builder: @escaping () -> MYGridContainer,
+		gridContainer: MYGridContainer<MYCalculatorAction>,
 		frame: CGRect = .zero
 	) {
-		self.loadGrid = builder
-		super.init(frame: frame)
+		self.container = gridContainer
+		let adapter = MyGridLayoutAdapter<MYCalculatorAction>()
+		super.init(frame: frame, collectionViewLayout: adapter)
+		delegate = self
+		dataSource = self
+		configure()
+		
+		register(MYCapsuleHighlightableContainerCell.self, forCellWithReuseIdentifier: "MYCapsuleHighlightableContainerCell")
 	}
 	
 	required init?(coder: NSCoder) { fatalError() }
@@ -70,53 +88,29 @@ final class MYCalculatorView: MYTouchSurface {
 	
 	override func layoutSubviews() {
 		super.layoutSubviews()
-		
-		currentGrid.width = bounds.width
-		let unitWidth = currentGrid.unitWidth
-		
-		currentGrid.layout(fittingHeight: bounds.height) { view, rect in
-			view.frame = rect
-			(view as? MYCalculatorButton)?.subview.frame = CGRect(
-				origin: .zero,
-				size: CGSize(width: unitWidth, height: rect.height)
-			)
-		}
-		
 		invalidateIntrinsicContentSize()
 	}
-		
+	
 	// MARK: - Public Methods
 	
 	func configure() {
-		updateVisibility(isHidden: false)
+		(collectionViewLayout as? MyGridLayoutAdapter<MYCalculatorAction>).map {
+			(indexesPath, actionPaths) = $0.configure(with: currentGrid)
+		}
+		reloadData()
 	}
 	
-	func safeUpdate(spacing: CGFloat? = nil) {
-		allGrids.forEach { grid in
-			spacing.map { grid.spacing = $0 }
-		}
+	func safeUpdate(spacing: CGFloat) {
+		container.vertical.spacing = spacing
+		container.horizontal.spacing = spacing
+		container.horizontalSecond.spacing = spacing
 		setNeedsLayout()
 	}
 	
 	// MARK: - Private Methods
 	
-	private func updateVisibility(isHidden: Bool) {
-		currentGrid.items.flatMap { $0 }.forEach { item in
-			guard case let .view(view, _) = item else { return }
-			if view.superview == nil {
-				addTile(view)
-			}
-			view.alpha = isHidden ? 0 : 1
-			view.isUserInteractionEnabled = !isHidden
-		}
-	}
-	
-	private func forEachButton(_ closure: (MYCalculatorButton) -> Void) {
-		allGrids.lazy.flatMap(\.items).joined().forEach { item in
-			if case .view(let view, _) = item, let button = view as? MYCalculatorButton {
-				closure(button)
-			}
-		}
+	private func forEachButton(_ closure: (MYCalculatorAction) -> Void) {
+		buttons.values.forEach { closure($0.action) }
 	}
 }
 
@@ -124,26 +118,30 @@ final class MYCalculatorView: MYTouchSurface {
 
 extension MYCalculatorView: MYCalculatorButtonDelegate {
 	
-	func calculatorButtonDidTap(_ button: MYCalculatorButton) {
-		if case .shift = button.model.action {
-			let isSelected = button.visualState == .selected
-			button.visualState = isSelected ? .normal : .selected
+	func calculatorButtonDidTap(_ model: MYCalculatorButtonModel) {
+		if case .shift = model.action {
+			let isSelected = model.visualState == .selected
 			isScientificMode = !isSelected
+			updateDate(model: {
+				var newModel = model
+				newModel.visualState = isSelected ? .normal : .selected
+				return newModel
+			}())
 			return
 		}
 		
-		delegate?.handle(button.model.action)
+		calculatorService?.handle(model.action)
 		
-		forEachButton { button in
-			switch button.model.action {
+		forEachButton { id in
+			guard var newModel = buttons[id], let calculatorService else { return }
+			switch id {
 			case let .binaryOperation(op):
-				let isActive = (op == delegate?.activeOperation)
-				button.visualState = isActive ? .selected : .normal
-				
+				let isActive = op == calculatorService.activeOperation
+				newModel.visualState = isActive ? .selected : .normal
+				updateDate(model: newModel)
 			case .clear:
-				let hasActiveState = delegate?.activeState ?? false
-				button.title = hasActiveState ? "C" : nil
-				
+				newModel.title = calculatorService.activeState ? "C" : "AC"
+				updateDate(model: newModel)
 			default:
 				break
 			}
@@ -151,12 +149,61 @@ extension MYCalculatorView: MYCalculatorButtonDelegate {
 	}
 }
 
-extension MYCalculatorView {
-	static func recursive(_ closure: @escaping (MYCalculatorView?) -> MYGridContainer) -> MYCalculatorView {
-		Recursive.build { resolve in
-			MYCalculatorView(builder: resolve)
-		} resolve: { myself in
-			closure(myself)
+extension MYCalculatorView: UICollectionViewDelegate {}
+extension MYCalculatorView: UICollectionViewDataSource {
+	func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+		indexesPath.count
+	}
+	
+	func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+		
+		guard
+			let cell = dequeueReusableCell(withReuseIdentifier: "MYCapsuleHighlightableContainerCell", for: indexPath) as? MYCapsuleHighlightableContainerCell,
+			let id = indexesPath[indexPath],
+			let model = buttons[id]
+		else {
+			return UICollectionViewCell()
+		}
+
+		let button: MYCalculatorButton
+		if model.spacingFlag {
+			button = MYCalculatorButton(model: model, anchor: .leading(spacing: currentGrid.spacing))
+		} else {
+			button = MYCalculatorButton(model: model)
+		}
+		button.delegate = self
+		cell.setHostedView(button)
+		return cell
+	}
+}
+
+import SwiftUI
+
+struct MYCalculatorViewRepresentable: UIViewRepresentable {
+	let orientation: MYOrientation = .vertical
+	let service = MYCalculatorService()
+	
+	func makeUIView(context: Context) -> MYCalculatorView {
+		let calculatorView = MYCalculatorView(gridContainer: MYCalculatorGridFactory().makeGrid())
+		calculatorView.calculatorService = service
+		calculatorView.configure()
+		return calculatorView
+	}
+	
+	func updateUIView(_ uiView: MYCalculatorView, context: Context) {
+		if uiView.orientation != orientation {
+			uiView.orientation = orientation
 		}
 	}
+}
+
+private struct MYExampleView: View {
+	var body: some View {
+		MYCalculatorViewRepresentable()
+			.ignoresSafeArea()
+	}
+}
+
+#Preview {
+	MYExampleView()
 }

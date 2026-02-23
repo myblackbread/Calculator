@@ -9,7 +9,9 @@
 import Foundation
 
 struct MYCalculatorButtonModel {
-	let title: String
+	var title: String
 	let action: MYCalculatorAction
 	let style: MYCalculatorButtonStyle
+	var visualState: MYCalculatorButtonVisualState = .normal
+	let spacingFlag: Bool
 }

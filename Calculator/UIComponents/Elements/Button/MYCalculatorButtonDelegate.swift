@@ -9,5 +9,5 @@
 import Foundation
 
 protocol MYCalculatorButtonDelegate: AnyObject {
-	func calculatorButtonDidTap(_ button: MYCalculatorButton)
+	func calculatorButtonDidTap(_ model: MYCalculatorButtonModel)
 }

@@ -22,12 +22,9 @@ final class MYCalculatorController: UIViewController {
 	}()
 	
 	let calculatorGrid = {
-		let calculatorGrid = Recursive.build { resolve in
-			MYCalculatorView(builder: resolve)
-		} resolve: { myself in
-			MYCalculatorFactory().makeGrid(target: myself)
-		}
+		let calculatorGrid = MYCalculatorView(gridContainer: MYCalculatorGridFactory().makeGrid())
 		calculatorGrid.configure()
+		calculatorGrid.backgroundColor = .clear
 		return calculatorGrid
 	}()
 	
@@ -36,7 +33,7 @@ final class MYCalculatorController: UIViewController {
 		view.addSubview(label)
 		view.addSubview(calculatorGrid)
 		view.backgroundColor = .black
-		calculatorGrid.delegate = delegate
+		calculatorGrid.calculatorService = delegate
 		
 		calculatorGrid.translatesAutoresizingMaskIntoConstraints = false
 		label.translatesAutoresizingMaskIntoConstraints = false

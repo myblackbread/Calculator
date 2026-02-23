@@ -6,8 +6,8 @@
 //
 
 
-import Foundation
+import UIKit
 
-protocol MYTouchSurfaceActionable: AnyObject {
+protocol MYTouchSurfaceActionable: UIView {
 	func touchSurfaceDidTrigger()
 }
